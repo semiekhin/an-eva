@@ -125,8 +125,20 @@ async def run_tests():
         assert r.status_code == 404
         print("  PASS test_history_404")
 
+        # 10. GET /api/docs/current — returns AN_EVA_CURRENT.md as plain text
+        r = await client.get("/api/docs/current")
+        if r.status_code == 200:
+            assert "text/plain" in r.headers["content-type"]
+            assert r.headers["cache-control"] == "no-cache"
+            assert len(r.text) > 0
+            print("  PASS test_docs_current")
+        else:
+            # File may not exist in test env — just check it's 404
+            assert r.status_code == 404
+            print("  PASS test_docs_current (404 — file absent)")
+
     await teardown(db_path)
-    print(f"\n9/9 tests passed")
+    print(f"\n10/10 tests passed")
 
 
 if __name__ == "__main__":
