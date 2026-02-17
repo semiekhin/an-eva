@@ -14,10 +14,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from config import HOST, PORT, CORS_ORIGINS, GENERATOR_HISTORY_LIMIT
+from config import HOST, PORT, CORS_ORIGINS, GENERATOR_HISTORY_LIMIT, BASE_DIR
 from state_manager import StateManager
 from message_processor import process_message
 from analyzer import analyze
@@ -249,6 +250,21 @@ async def get_history(session_id: str, limit: int = 50):
             for m in messages
         ],
     }
+
+
+# ── Docs ──────────────────────────────────────────────────────────────────────
+
+@app.get("/api/docs/current")
+async def docs_current():
+    path = BASE_DIR / "docs" / "AN_EVA_CURRENT.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="docs/AN_EVA_CURRENT.md not found")
+    content = path.read_text(encoding="utf-8")
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 # ── Статика виджета ──────────────────────────────────────────────────────────
