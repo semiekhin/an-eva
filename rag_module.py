@@ -49,20 +49,17 @@ def init_rag() -> bool:
         ef = _get_embedding_fn()
         client = chromadb.PersistentClient(path=str(CHROMA_PATH))
 
-        existing = [c.name for c in client.list_collections()]
-
-        if RAG_COLLECTION in existing:
-            _collection = client.get_collection(name=RAG_COLLECTION, embedding_function=ef)
-            count = _collection.count()
-            log.info(f"[rag] loaded: {count} examples")
-            return True
-
-        # Создаём и индексируем
-        _collection = client.create_collection(
+        _collection = client.get_or_create_collection(
             name=RAG_COLLECTION,
             embedding_function=ef,
             metadata={"hnsw:space": "cosine"},
         )
+
+        if _collection.count() > 0:
+            log.info(f"[rag] loaded: {_collection.count()} examples")
+            return True
+
+        # Индексируем
 
         examples = _load_examples()
         if not examples:
