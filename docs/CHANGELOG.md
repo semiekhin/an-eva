@@ -7,3 +7,8 @@
 - Создан systemd сервис an-eva (порт 8005)
 - Настроен 1Code (Agent, Opus 4.6, Worktree)
 - Создана система управления сессиями
+
+## 17.02.2026
+- Обновлён AN_EVA_PROJECT.md: изоляция, свой путь /opt/an-eva/, порт 8005
+- Создана система управления сессиями (SESSION_END_TEMPLATE.md)
+- Решено: источник правды — GitHub, CURRENT.md fetch'ится из GitHub
