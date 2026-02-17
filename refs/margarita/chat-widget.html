@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600&display=swap');
+
+:root {
+  --rz-bg: #060b06;
+  --rz-bg-light: #0f1a0f;
+  --rz-gold: #c9a54a;
+  --rz-gold-dim: rgba(201,165,74,0.15);
+  --rz-gold-glow: rgba(201,165,74,0.3);
+  --rz-text: #f2ede5;
+  --rz-text-dim: rgba(242,237,229,0.6);
+  --rz-border: rgba(201,165,74,0.2);
+  --rz-radius: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+#rizalta-chat-widget {
+  font-family: 'Raleway', sans-serif;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99999;
+}
+
+/* ── Кнопка чата ── */
+.rz-chat-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--rz-gold), #b8943f);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(201,165,74,0.4);
+  transition: transform 0.3s, box-shadow 0.3s;
+  animation: rz-pulse 2s ease-in-out infinite;
+  position: relative;
+}
+.rz-chat-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 30px rgba(201,165,74,0.6);
+}
+.rz-chat-btn svg {
+  width: 28px;
+  height: 28px;
+  fill: var(--rz-bg);
+}
+.rz-chat-btn.active svg.icon-chat { display: none; }
+.rz-chat-btn:not(.active) svg.icon-close { display: none; }
+
+@keyframes rz-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(201,165,74,0.4); }
+  50% { box-shadow: 0 4px 30px rgba(201,165,74,0.7); }
+}
+
+/* ── Окно чата ── */
+.rz-chat-window {
+  display: none;
+  position: fixed;
+  bottom: 100px;
+  right: 24px;
+  width: 400px;
+  height: 550px;
+  background: var(--rz-bg);
+  border: 1px solid var(--rz-border);
+  border-radius: var(--rz-radius);
+  box-shadow: 0 16px 60px rgba(0,0,0,0.6);
+  flex-direction: column;
+  overflow: hidden;
+}
+.rz-chat-window.open {
+  display: flex;
+  animation: rz-slide-up 0.3s ease-out;
+}
+@keyframes rz-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Шапка ── */
+.rz-header {
+  padding: 16px 20px;
+  background: var(--rz-bg-light);
+  border-bottom: 1px solid var(--rz-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rz-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--rz-gold), #b8943f);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--rz-bg);
+  flex-shrink: 0;
+}
+.rz-header-info h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rz-text);
+}
+.rz-header-info p {
+  font-size: 12px;
+  color: var(--rz-gold);
+  font-weight: 400;
+}
+
+/* ── Сообщения ── */
+.rz-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rz-messages::-webkit-scrollbar { width: 4px; }
+.rz-messages::-webkit-scrollbar-track { background: transparent; }
+.rz-messages::-webkit-scrollbar-thumb { background: var(--rz-border); border-radius: 2px; }
+
+.rz-msg {
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--rz-text);
+  word-wrap: break-word;
+}
+.rz-msg.bot {
+  align-self: flex-start;
+  background: var(--rz-bg-light);
+  border: 1px solid var(--rz-border);
+  border-bottom-left-radius: 4px;
+}
+.rz-msg.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, var(--rz-gold), #b8943f);
+  color: var(--rz-bg);
+  font-weight: 500;
+  border-bottom-right-radius: 4px;
+}
+.rz-msg .rz-msg-avatar {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--rz-gold), #b8943f);
+  text-align: center;
+  line-height: 24px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rz-bg);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Typing indicator ── */
+.rz-typing {
+  display: none;
+  align-self: flex-start;
+  padding: 10px 14px;
+  background: var(--rz-bg-light);
+  border: 1px solid var(--rz-border);
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+  font-size: 13px;
+  color: var(--rz-text-dim);
+}
+.rz-typing.show { display: block; }
+.rz-typing span {
+  display: inline-block;
+  animation: rz-dot 1.4s infinite;
+}
+.rz-typing span:nth-child(2) { animation-delay: 0.2s; }
+.rz-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes rz-dot {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+/* ── Quick replies ── */
+.rz-quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+.rz-quick-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--rz-gold);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--rz-gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rz-quick-btn:hover {
+  background: var(--rz-gold-dim);
+}
+
+/* ── Ввод ── */
+.rz-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--rz-border);
+  display: flex;
+  gap: 8px;
+  background: var(--rz-bg-light);
+}
+.rz-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--rz-border);
+  border-radius: 24px;
+  background: var(--rz-bg);
+  color: var(--rz-text);
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.rz-input::placeholder { color: var(--rz-text-dim); }
+.rz-input:focus { border-color: var(--rz-gold); }
+.rz-send-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, var(--rz-gold), #b8943f);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.rz-send-btn:hover { transform: scale(1.05); }
+.rz-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rz-send-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--rz-bg);
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .rz-chat-window {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+  }
+  .rz-chat-btn {
+    bottom: 16px;
+    right: 16px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="rizalta-chat-widget">
+  <!-- Кнопка -->
+  <button class="rz-chat-btn" id="rzChatBtn" aria-label="Открыть чат">
+    <svg class="icon-chat" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.2L4 17.2V4h16v12z"/></svg>
+    <svg class="icon-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+  </button>
+
+  <!-- Окно -->
+  <div class="rz-chat-window" id="rzChatWindow">
+    <div class="rz-header">
+      <div class="rz-avatar">М</div>
+      <div class="rz-header-info">
+        <h3>Маргарита</h3>
+        <p>RIZALTA Resort Belokurikha</p>
+      </div>
+    </div>
+    <div class="rz-messages" id="rzMessages"></div>
+    <div class="rz-typing" id="rzTyping">
+      Маргарита печатает<span>.</span><span>.</span><span>.</span>
+    </div>
+    <div class="rz-quick-replies" id="rzQuickReplies"></div>
+    <div class="rz-input-area">
+      <input class="rz-input" id="rzInput" type="text" placeholder="Напишите сообщение..." autocomplete="off">
+      <button class="rz-send-btn" id="rzSendBtn" aria-label="Отправить">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Настройки ──
+  const API_URL = window.RIZALTA_CHAT_API || 'https://webchat.rizaltaservice.ru';
+  const AUTO_OPEN_DELAY = 30000;
+  const GREETING = 'Здравствуйте! Я Маргарита, консультант RIZALTA Resort Belokurikha. Чем могу помочь? 😊';
+
+  // ── DOM ──
+  const btn = document.getElementById('rzChatBtn');
+  const win = document.getElementById('rzChatWindow');
+  const msgs = document.getElementById('rzMessages');
+  const input = document.getElementById('rzInput');
+  const sendBtn = document.getElementById('rzSendBtn');
+  const typing = document.getElementById('rzTyping');
+  const quickReplies = document.getElementById('rzQuickReplies');
+
+  let isOpen = false;
+  let sessionId = localStorage.getItem('rz_session_id') || null;
+  let isSending = false;
+
+  // ── UTM ──
+  function getUtm() {
+    const params = new URLSearchParams(window.location.search);
+    const utm = {};
+    ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].forEach(function(k) {
+      if (params.get(k)) utm[k] = params.get(k);
+    });
+    return utm;
+  }
+
+  // ── Session Storage (история для отображения) ──
+  function saveHistory(messages) {
+    try { sessionStorage.setItem('rz_messages', JSON.stringify(messages)); } catch(e) {}
+  }
+  function loadHistory() {
+    try { return JSON.parse(sessionStorage.getItem('rz_messages')) || []; } catch(e) { return []; }
+  }
+
+  // ── Рендер сообщения ──
+  function addMessage(text, role) {
+    var div = document.createElement('div');
+    div.className = 'rz-msg ' + role;
+    if (role === 'bot') {
+      div.innerHTML = '<span class="rz-msg-avatar">М</span>' + escapeHtml(text);
+    } else {
+      div.textContent = text;
+    }
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Сохраняем
+    var history = loadHistory();
+    history.push({role: role, text: text});
+    saveHistory(history);
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── Quick replies ──
+  function showQuickReplies(replies) {
+    quickReplies.innerHTML = '';
+    if (!replies || !replies.length) return;
+    replies.forEach(function(text) {
+      var b = document.createElement('button');
+      b.className = 'rz-quick-btn';
+      b.textContent = text;
+      b.addEventListener('click', function() {
+        quickReplies.innerHTML = '';
+        sendMessage(text);
+      });
+      quickReplies.appendChild(b);
+    });
+  }
+
+  // ── Typing ──
+  function showTyping() { typing.classList.add('show'); msgs.scrollTop = msgs.scrollHeight; }
+  function hideTyping() { typing.classList.remove('show'); }
+
+  // ── API ──
+  function sendMessage(text) {
+    if (!text.trim() || isSending) return;
+    isSending = true;
+    input.value = '';
+    sendBtn.disabled = true;
+    quickReplies.innerHTML = '';
+
+    addMessage(text, 'user');
+    showTyping();
+
+    var body = { message: text, metadata: getUtm() };
+    if (sessionId) body.session_id = sessionId;
+
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 15000);
+
+    fetch(API_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      clearTimeout(timeout);
+      hideTyping();
+      isSending = false;
+      sendBtn.disabled = false;
+
+      if (data.session_id) {
+        sessionId = data.session_id;
+        localStorage.setItem('rz_session_id', sessionId);
+      }
+
+      // Сброс сессии при fallback-ответе
+      if (data.message && (data.message.indexOf('связь подвисла') !== -1 || data.message.indexOf('Напишите ещё раз') !== -1)) {
+        sessionId = null;
+        localStorage.removeItem('rz_session_id');
+      }
+
+      addMessage(data.message, 'bot');
+      showQuickReplies(data.quick_replies || []);
+    })
+    .catch(function(err) {
+      clearTimeout(timeout);
+      hideTyping();
+      isSending = false;
+      sendBtn.disabled = false;
+      sessionId = null;
+      localStorage.removeItem('rz_session_id');
+      var errorMsg = err.name === 'AbortError'
+        ? 'Сервер не отвечает, попробуйте позже.'
+        : 'Извините, связь подвисла. Попробуйте ещё раз.';
+      addMessage(errorMsg, 'bot');
+      console.error('RIZALTA chat error:', err);
+    });
+  }
+
+  // ── Открытие/закрытие ──
+  function toggle() {
+    isOpen = !isOpen;
+    if (isOpen) {
+      win.classList.add('open');
+      btn.classList.add('active');
+      btn.style.animation = 'none';
+      input.focus();
+      localStorage.setItem('rz_chat_opened', '1');
+
+      // Приветствие при первом открытии
+      if (loadHistory().length === 0) {
+        addMessage(GREETING, 'bot');
+        showQuickReplies(['💰 Рассчитать доход', '🏠 Подобрать номер', '📊 Сравнить с депозитом']);
+      }
+    } else {
+      win.classList.remove('open');
+      btn.classList.remove('active');
+    }
+  }
+
+  // ── Восстановление истории ──
+  function restoreHistory() {
+    var history = loadHistory();
+    history.forEach(function(m) {
+      var div = document.createElement('div');
+      div.className = 'rz-msg ' + m.role;
+      if (m.role === 'bot') {
+        div.innerHTML = '<span class="rz-msg-avatar">М</span>' + escapeHtml(m.text);
+      } else {
+        div.textContent = m.text;
+      }
+      msgs.appendChild(div);
+    });
+    if (history.length > 0) {
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  }
+
+  // ── Events ──
+  btn.addEventListener('click', toggle);
+  sendBtn.addEventListener('click', function() { sendMessage(input.value); });
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input.value);
+    }
+  });
+
+  // ── Init ──
+  restoreHistory();
+
+  // Автооткрытие через 30 сек
+  if (!localStorage.getItem('rz_chat_opened')) {
+    setTimeout(function() {
+      if (!isOpen) toggle();
+    }, AUTO_OPEN_DELAY);
+  }
+
+})();
+</script>
+</body>
+</html>
