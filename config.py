@@ -29,6 +29,8 @@ CORS_ORIGINS = [
     "http://www.rizaltabelokurikha.ru",
     "http://localhost:3000",
     "http://127.0.0.1:5500",
+    "https://eva-dev.rizaltaservice.ru",
+    "http://eva-dev.rizaltaservice.ru",
 ]
 
 # === OpenAI ===
@@ -71,3 +73,7 @@ BITRIX_WEBHOOK_URL = os.getenv("BITRIX_WEBHOOK_URL", "")
 # === Observer ===
 OBSERVER_BOT_TOKEN = os.getenv("OBSERVER_BOT_TOKEN", "")
 OBSERVER_CHAT_ID = os.getenv("OBSERVER_CHAT_ID", "")
+
+# === Telegram Leads ===
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_NOTIFY_CHAT_ID = os.getenv("TELEGRAM_NOTIFY_CHAT_ID", "")

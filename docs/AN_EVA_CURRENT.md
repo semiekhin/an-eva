@@ -1,72 +1,117 @@
 # Текущий статус АН Эва
 
-📅 **Последняя сессия:** 17.02.2026, 15:00 MSK
-**Фаза:** 1–4 — Ядро написано, сервис запущен на DEV
+📅 **Последняя сессия:** 17.02.2026, 16:45 MSK
+**Фаза:** 1–4 — Ядро + SSE + Лиды (бэкенд готов, фронт заблокирован Cloudflare)
 
-## ✅ Что сделано 17.02.2026 (сессия 2)
-- Merge ветки functional-gopher-db8bc3 в main (25 файлов, 3975 строк)
-- Push на GitHub — репо больше не пустой
-- Cloudflare tunnel: eva-dev.rizaltaservice.ru → :8005 (через PROD tunnel)
-- RAG починен: list_collections() → get_or_create_collection (ChromaDB 1.5.0)
-- .env создан на сервере (OPENAI_API_KEY, PORT=8005)
-- systemd сервис an-eva запущен и включен (enable)
-- Полный пайплайн протестирован: session → chat → ответ с конкретикой
-- Процесс разработки зафиксирован: 1Code → merge → push → pull на сервер
+## ✅ Что сделано 17.02.2026 (сессия 3, claude.ai)
+
+### Бэкенд (всё работает, проверено curl):
+- SSE-эндпоинт POST /api/chat/stream — потоковая отдача токенов
+- lead_notifier.py — отправка лидов в Telegram через @RIZALTAEVA_bot
+- Интеграция лидов в _full_pipeline() и /api/chat/stream
+- Фильтрация [END] в generate_stream() — буферизация, клиент не видит маркер
+- config.py: + TELEGRAM_BOT_TOKEN, TELEGRAM_NOTIFY_CHAT_ID, + CORS eva-dev
+- .env: + TELEGRAM_BOT_TOKEN, TELEGRAM_NOTIFY_CHAT_ID
+
+### Фронтенд (НЕ работает через Cloudflare):
+- widget/chat.js переписан: SSE через ReadableStream + fallback на /api/chat
+- sessionPromise — защита от race condition (двойной greeting)
+- Flush буфера при завершении потока
+
+### Проверено:
+- curl localhost:8005 — SSE стримит посимвольно ✅
+- curl через Cloudflare — SSE стримит ✅
+- Лид в Telegram — приходит при [END] ✅
+- Браузер через Cloudflare — SSE НЕ работает ❌ (буферизация CF)
 
 ## 🔄 Текущее состояние
+
 ### Работает:
 - АН Эва на :8005 через systemd ✅
-- eva-dev.rizaltaservice.ru — внешний доступ ✅
-- RAG — 50 примеров, семантический поиск ✅
 - Полный пайплайн: extractor → state → analyzer → RAG → generator ✅
-- GitHub синхронизирован с MacBook и сервером ✅
+- SSE стриминг (через curl) ✅
+- Лиды → @RIZALTAEVA_bot (chat_id: 512319063) ✅
+- [END] фильтрация в потоке ✅
+- RAG — 50 примеров, семантический поиск ✅
+- GitHub синхронизирован (нужен коммит сессии 3!) ⚠️
 - Текущая Маргарита на :8001 — работает параллельно ✅
 
-### Не сделано:
-- Стриминг (SSE) — ответы приходят целиком, нет посимвольной отправки
-- Виджет не подключен к АН Эве (всё ещё смотрит на старую Маргариту)
-- CRM интеграция (Bitrix) не настроена
+### НЕ работает:
+- Виджет в браузере — Cloudflare буферизует SSE, клиент получает таймаут
+- 7-10 сек до первого токена (3 последовательных LLM-вызова)
+- Полный сценарий до [END] в браузере НЕ прогнан
 - Observer (мониторинг в Telegram) не подключен
-- Полный сценарий до [END] не прогнан
-- OpenAI ключ: старые ключи скомпрометированы (были в чате), рекомендуется перевыпуск
 
-## 📁 Структура на сервере
+## ❌ Главная проблема: Cloudflare буферизует SSE
+
+Cloudflare Tunnel проксирует трафик и копит SSE-токены в буфере.
+curl работает (обходит буфер), браузер — нет.
+Попытки починить padding (2KB, 8KB) и keepalive-комментариями — НЕ помогли.
+
+### Решение: Nginx + Let's Encrypt (без Cloudflare для dev)
+1. A-запись eva-dev.rizaltaservice.ru → 72.56.64.91 (в reg.ru DNS)
+2. nginx reverse proxy → localhost:8005 с proxy_buffering off
+3. certbot для SSL
+4. Убрать Cloudflare tunnel для eva-dev
+
+## 📁 Ключевые файлы на сервере /opt/an-eva/
+
+### Ядро (сессия 2):
+- main.py, config.py, extractor.py, state_manager.py, message_processor.py
+- analyzer.py, rag_module.py, generator.py
+- rizalta_prompt_v2.py, rizalta_context.py
+
+### Новое (сессия 3):
+- lead_notifier.py — отправка лидов в Telegram
+- main.py — + /api/chat/stream, + _send_lead_notification()
+- generator.py — фикс [END] буферизации в generate_stream()
+- config.py — + TELEGRAM vars, + CORS
+- widget/chat.js — полная перезапись (SSE + fallback)
+
+### Прочее:
+- widget/index.html — без изменений
+- tests/ (11 файлов) — не обновлены
+- .env (секреты, не в git)
+
+## 🔜 Следующие задачи (приоритет)
+
+### P0 — Блокеры:
+1. Nginx + Let's Encrypt для eva-dev (убрать зависимость от CF)
+2. Проверить SSE в браузере через nginx
+
+### P1 — Скорость:
+3. Параллельные вызовы extractor + analyzer (asyncio.gather) → -3 сек
+4. Быстрая модель для extractor/analyzer (gpt-4o-mini вместо gpt-5.2)
+5. Цель: < 5 сек до первого токена
+
+### P2 — Тестирование:
+6. Прогнать полный сценарий до [END] в браузере
+7. Проверить greeting (один раз)
+8. Тест лидов из браузера
+
+### P3 — Продакшн:
+9. Подключить виджет к лендингу rizaltabelokurikha.ru
+10. Обновить docs/AN_EVA_CURRENT.md
+11. Ротировать OpenAI API ключ (засвечен в чате!)
+
+## ⚠️ Важный контекст
+
+- Порт: 8005 (dev), 8001 только после замены старой Маргариты
+- Путь: /opt/an-eva/
+- Все существующие сервисы НЕ ТРОГАТЬ
+- Процесс: 1Code (код) → merge+push (MacBook) → pull+restart (сервер)
+- Сессия 3 сделана hotfix на сервере — НУЖЕН КОММИТ
+- Лиды отправлять Sergio лично в Telegram, НЕ в Bitrix CRM
+- Cloudflare tunnel НЕ подходит для SSE — нужен nginx
+
+## 📊 Endpoints
 ```
-/opt/an-eva/
-├── main.py                    ✅ FastAPI, эндпоинты, lifespan
-├── config.py                  ✅ Настройки, порт 8005
-├── extractor.py               ✅ NLU ~10 полей
-├── state_manager.py           ✅ SQLite + aiosqlite
-├── message_processor.py       ✅ Extractor → State → Signals
-├── analyzer.py                ✅ LLM-Analyzer (stage + rag_query)
-├── rag_module.py              ✅ ChromaDB 1.5.0, 50 примеров
-├── generator.py               ✅ gpt-5.2, Responses API
-├── rizalta_prompt_v2.py       ✅ Промпт Маргариты
-├── rizalta_context.py         ✅ Объектный контекст RIZALTA
-├── .env                       ✅ Секреты (не в git)
-├── tests/                     ✅ 11 тест-файлов
-├── widget/
-│   ├── index.html             ✅ Виджет чата
-│   └── chat.js                ✅ JS логика
-├── data/
-│   ├── properties.db          ✅ 348 лотов
-│   ├── rag_training_data/     ✅ 50 примеров + ChromaDB индекс
-│   └── ...                    ✅ Остальные данные
-├── services/                  ✅ Калькуляторы
-├── db/                        ✅ Папка создана
-└── docs/                      ✅ Документация
+GET  /api/health              — проверка
+POST /api/session             — создание сессии + greeting
+POST /api/session/resume      — восстановление сессии
+POST /api/chat                — синхронный ответ (работает)
+POST /api/chat/stream         — SSE стриминг (работает curl, НЕ работает браузер через CF)
+GET  /api/history/{session_id} — история
+GET  /api/docs/current        — этот файл
+GET  /widget/                 — статика виджета
 ```
-
-## 🔜 Следующий шаг
-1. Подключить виджет к eva-dev.rizaltaservice.ru для тестирования
-2. Прогнать полный сценарий: приветствие → квалификация → презентация → сбор контакта → [END]
-3. Реализовать стриминг (SSE) — критично для UX
-4. Перевыпустить OpenAI ключ
-
-## ⚠️ Важный контекст для следующего чата
-- АН Эва ЗАПУЩЕНА на :8005, доступна через eva-dev.rizaltaservice.ru
-- Процесс: 1Code (код) → merge+push (терминал MacBook) → pull+restart (сервер)
-- На сервере НИКОГДА не редактировать код (кроме .env). Исключение — hotfix с немедленным коммитом
-- RAG фикс был сделан на сервере и закоммичен оттуда (долг закрыт)
-- Cloudflare: eva-dev добавлен в PROD tunnel config.yml (не отдельный tunnel)
-- Старая Маргарита на :8001 — не трогать до полной готовности АН Эвы

@@ -116,13 +116,34 @@ async def generate_stream(
             stream=True,
         )
 
+        buffer = ""
         async for event in stream:
             if event.type == "response.output_text.delta":
                 delta = event.delta
                 full_text += delta
-                # Не отдаём [END] клиенту
-                if "[END]" not in delta and "[end]" not in delta:
-                    yield {"type": "token", "token": delta}
+                buffer += delta
+
+                # Держим буфер если может быть [END]
+                if "[" in buffer or buffer.endswith("["):
+                    # Проверяем полный [END]
+                    if "[END]" in buffer or "[end]" in buffer:
+                        clean = buffer.replace("[END]", "").replace("[end]", "")
+                        if clean:
+                            yield {"type": "token", "token": clean}
+                        buffer = ""
+                    # Ещё не полный — ждём (макс 10 символов буфера)
+                    elif len(buffer) > 10:
+                        yield {"type": "token", "token": buffer}
+                        buffer = ""
+                else:
+                    yield {"type": "token", "token": buffer}
+                    buffer = ""
+
+        # Flush остаток буфера
+        if buffer:
+            clean = buffer.replace("[END]", "").replace("[end]", "")
+            if clean:
+                yield {"type": "token", "token": clean}
 
         # Финализация
         ended, finish_type = _detect_end(full_text)

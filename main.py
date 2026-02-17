@@ -8,13 +8,14 @@ main.py — FastAPI Web API для АН Эва (RIZALTA webchat)
 """
 
 import uuid
+import json as json_module
 import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -23,9 +24,10 @@ from state_manager import StateManager
 from message_processor import process_message
 from analyzer import analyze
 from rag_module import init_rag, search_examples, format_examples_for_prompt
-from generator import generate
+from generator import generate, generate_stream, extract_phone_from_history, extract_telegram_from_history
 from rizalta_prompt_v2 import get_system_prompt, format_state_summary
 from rizalta_context import get_rizalta_context
+from lead_notifier import send_lead_to_telegram
 
 # ── Логирование ─────────────────────────────────────────────────────────────
 
@@ -166,6 +168,11 @@ async def _full_pipeline(user_id: int, session_id: str, message: str) -> str:
             "finish_type": gen_result["finish_type"],
         })
         log.info(f"[pipeline] dialog ended, type={gen_result['finish_type']}")
+        full_history = history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": reply},
+        ]
+        await _send_lead_notification(user_id, session_id, gen_result["finish_type"], full_history)
 
     # 8. Сохраняем ответ бота
     await state_manager.save_message(session_id, user_id, "assistant", reply)
@@ -173,6 +180,26 @@ async def _full_pipeline(user_id: int, session_id: str, message: str) -> str:
 
     return reply
 
+
+
+
+async def _send_lead_notification(user_id: int, session_id: str, finish_type: str | None, history: list[dict]):
+    """Отправляет уведомление о лиде в Telegram."""
+    try:
+        client_state = await state_manager.get_state(user_id)
+        phone = extract_phone_from_history(history)
+        tg_user = extract_telegram_from_history(history)
+        await send_lead_to_telegram(
+            user_id=user_id,
+            session_id=session_id,
+            finish_type=finish_type,
+            client_state=client_state,
+            phone=phone,
+            telegram_username=tg_user,
+            last_messages=history,
+        )
+    except Exception as e:
+        log.error(f"[lead] notification error: {e}")
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -233,6 +260,103 @@ async def chat(req: ChatRequest):
         session_id=req.session_id,
         reply=reply,
         timestamp=datetime.now().isoformat(),
+    )
+
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """SSE стриминг ответа Маргариты."""
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Empty message")
+    if len(req.message) > 2000:
+        raise HTTPException(status_code=400, detail="Message too long (max 2000)")
+
+    user_id = await _get_or_create_user_id(req.session_id)
+
+    async def event_stream():
+        # Cloudflare anti-buffering: 8KB padding
+        yield ": " + "x" * 8192 + "\n\n"
+
+        await state_manager.save_message(req.session_id, user_id, "user", req.message.strip())
+        history = await state_manager.get_history(req.session_id, limit=GENERATOR_HISTORY_LIMIT)
+
+        yield ": processing\n\n"
+
+        result = await process_message(
+            user_id=user_id,
+            message=req.message.strip(),
+            history=history,
+            state_manager=state_manager,
+        )
+        client_state = result["client_state"]
+
+        yield ": analyzing\n\n"
+
+        analysis = await analyze(
+            message=req.message.strip(),
+            history=history,
+            client_state=client_state,
+        )
+        stage = analysis["stage"]
+        rag_query = analysis["rag_query"]
+        log.info(f"[stream] user={user_id}: stage={stage}, query=\'{rag_query[:30]}\'")
+
+        examples = search_examples(stage, rag_query)
+        examples_prompt = format_examples_for_prompt(examples) if examples else ""
+
+        state_summary = format_state_summary(client_state)
+        rizalta_context = get_rizalta_context()
+        system_prompt = get_system_prompt(state_summary, rizalta_context, examples_prompt)
+
+        full_reply = ""
+        ended = False
+        finish_type = None
+
+        async for chunk in generate_stream(
+            system_prompt=system_prompt,
+            history=history,
+            message=req.message.strip(),
+        ):
+            if chunk["type"] == "token":
+                full_reply += chunk["token"]
+                data = json_module.dumps({"type": "token", "token": chunk["token"]}, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+            elif chunk["type"] == "done":
+                ended = chunk.get("ended", False)
+                finish_type = chunk.get("finish_type")
+            elif chunk["type"] == "error":
+                data = json_module.dumps({"type": "error", "error": chunk["error"]}, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+
+        if ended:
+            full_reply = full_reply.replace("[END]", "").replace("[end]", "").strip()
+            await state_manager.update_state(user_id, {
+                "dialog_finished": True,
+                "finish_type": finish_type,
+            })
+            await _send_lead_notification(user_id, req.session_id, finish_type, history + [
+                {"role": "user", "content": req.message.strip()},
+                {"role": "assistant", "content": full_reply},
+            ])
+
+        if not full_reply.strip():
+            full_reply = "Подскажите, что для вас важнее — посмотреть варианты или обсудить условия?"
+
+        await state_manager.save_message(req.session_id, user_id, "assistant", full_reply)
+        await state_manager.touch_session(req.session_id)
+
+        data = json_module.dumps({"type": "done", "ended": ended}, ensure_ascii=False)
+        yield f"data: {data}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
