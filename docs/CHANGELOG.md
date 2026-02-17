@@ -23,3 +23,11 @@
 - Деплой на сервер: merge ветки, установка зависимостей, systemd с UTF-8
 - Smoke test пройден: Маргарита отвечает на /api/chat, квалифицирует клиента
 - Проблемы: RAG 0 примеров (utf-8), нет внешнего доступа, ключ скомпрометирован
+
+## 17.02.2026 — Сессия 2
+- Merge functional-gopher-db8bc3 → main (25 файлов, 3975 строк кода)
+- Cloudflare tunnel: eva-dev.rizaltaservice.ru → :8005
+- RAG fix: list_collections() → get_or_create_collection (ChromaDB 1.5.0)
+- .env создан, systemd сервис запущен и включен
+- Полный пайплайн протестирован через curl
+- Зафиксирован процесс разработки (1Code → merge → push → pull)

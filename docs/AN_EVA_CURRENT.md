@@ -1,83 +1,72 @@
 # Текущий статус АН Эва
 
-📅 **Последняя сессия:** 17.02.2026, 12:20 MSK
-**Фаза:** 4 — Веб-слой (завершена). Готовность к продакшну ~90%.
+📅 **Последняя сессия:** 17.02.2026, 15:00 MSK
+**Фаза:** 1–4 — Ядро написано, сервис запущен на DEV
 
-## ✅ Что сделано в этой сессии (17.02.2026)
-
-### Код (Фазы 1-4 полностью)
-- **Фаза 0:** Скопированы refs/sofia/ и refs/margarita/ на сервер, push в GitHub
-- **Фаза 1 (Ядро):** config.py, extractor.py, state_manager.py, message_processor.py, analyzer.py — 41 тест
-- **Фаза 2 (RAG + Generator):** rag_module.py, generator.py — 25 тестов
-- **Фаза 3 (Промпт):** rizalta_prompt_v2.py, rizalta_context.py — 22 теста
-- **Фаза 4 (Веб-слой):** main.py, widget/index.html, widget/chat.js — 21 тест
-- **Итого:** 11 файлов, ~4000 строк, 109 тестов
-
-### Деплой на сервер
-- Код задеплоен в /opt/an-eva/ (merge из ветки functional-gopher-db8bc3)
-- Зависимости установлены (pip --break-system-packages)
-- systemd сервис an-eva обновлён (добавлен UTF-8: LC_ALL, LANG, PYTHONIOENCODING)
-- .env создан с реальным OpenAI ключом
-- **Сервер работает на порту 8005, отвечает на /api/health и /api/chat**
-- **Smoke test пройден:** Маргарита отвечает конкретно, с цифрами, квалифицирует
-
-### Подтверждённый ответ Маргариты (live test)
-> Клиент: "Хочу инвестировать 7 миллионов"
-> Маргарита: "На 7 млн обычно подбираем компактные апартаменты 20–40 м² в корпусах Digital или Family (цены от 5 млн); по модели с УК прогнозируемо более 2 млн руб/год при загрузке 70% плюс рост стоимости на стройке около 20% в год. Вам удобнее 100% оплата, рассрочка или ипотека?"
+## ✅ Что сделано 17.02.2026 (сессия 2)
+- Merge ветки functional-gopher-db8bc3 в main (25 файлов, 3975 строк)
+- Push на GitHub — репо больше не пустой
+- Cloudflare tunnel: eva-dev.rizaltaservice.ru → :8005 (через PROD tunnel)
+- RAG починен: list_collections() → get_or_create_collection (ChromaDB 1.5.0)
+- .env создан на сервере (OPENAI_API_KEY, PORT=8005)
+- systemd сервис an-eva запущен и включен (enable)
+- Полный пайплайн протестирован: session → chat → ответ с конкретикой
+- Процесс разработки зафиксирован: 1Code → merge → push → pull на сервер
 
 ## 🔄 Текущее состояние
-
 ### Работает:
-- FastAPI на порту 8005 ✅
-- systemd сервис an-eva (active/running) ✅
-- Endpoints: /api/health, /api/session, /api/session/resume, /api/chat, /api/history ✅
-- Extractor + StateManager + Analyzer + Generator — полный пайплайн ✅
-- Маргарита отвечает конкретно, квалифицирует, даёт цифры ✅
+- АН Эва на :8005 через systemd ✅
+- eva-dev.rizaltaservice.ru — внешний доступ ✅
+- RAG — 50 примеров, семантический поиск ✅
+- Полный пайплайн: extractor → state → analyzer → RAG → generator ✅
+- GitHub синхронизирован с MacBook и сервером ✅
+- Текущая Маргарита на :8001 — работает параллельно ✅
 
-### Не работает / проблемы:
-- **RAG: 0 примеров загружено** — ошибка кодировки при загрузке examples.json (ascii vs utf-8)
-- **Нет внешнего доступа** — порт 8005 не открыт снаружи, нужен Cloudflare tunnel или настройка
-- **OpenAI ключ скомпрометирован** — был показан в чате, НУЖНО ПЕРЕВЫПУСТИТЬ
-- **1Code worktree-ветка** — код в ветке functional-gopher-db8bc3, нужен merge в main
-- **Виджет не протестирован в браузере** — только curl-тесты
+### Не сделано:
+- Стриминг (SSE) — ответы приходят целиком, нет посимвольной отправки
+- Виджет не подключен к АН Эве (всё ещё смотрит на старую Маргариту)
+- CRM интеграция (Bitrix) не настроена
+- Observer (мониторинг в Telegram) не подключен
+- Полный сценарий до [END] не прогнан
+- OpenAI ключ: старые ключи скомпрометированы (были в чате), рекомендуется перевыпуск
 
-## 🔜 Следующий шаг
-1. **⚠️ СРОЧНО: Перевыпустить OpenAI API ключ** → platform.openai.com → revoke → create new → обновить .env → restart an-eva
-2. **Настроить внешний доступ** — Cloudflare tunnel на :8005 (eva-dev.rizaltaservice.ru) или переключить существующий. Вопрос к Sergio: как webchat.rizaltaservice.ru работает сейчас? Через Cloudflare tunnel?
-3. **Починить RAG** — ошибка utf-8 при загрузке примеров
-4. **Merge в main** — объединить ветку functional-gopher-db8bc3 в main
-5. **Тест виджета в браузере** — открыть widget/index.html через внешний URL
-
-## 📁 Структура кода
+## 📁 Структура на сервере
 ```
 /opt/an-eva/
-├── main.py                    ✅ FastAPI, 5 endpoints, SSE
-├── config.py                  ✅ Порт, пути, модели, CORS
-├── extractor.py               ✅ NLU ~10 полей, async
-├── state_manager.py           ✅ aiosqlite, WAL, 3 таблицы
+├── main.py                    ✅ FastAPI, эндпоинты, lifespan
+├── config.py                  ✅ Настройки, порт 8005
+├── extractor.py               ✅ NLU ~10 полей
+├── state_manager.py           ✅ SQLite + aiosqlite
 ├── message_processor.py       ✅ Extractor → State → Signals
-├── analyzer.py                ✅ LLM stage + rag_query
-├── rag_module.py              ✅ ChromaDB (0 примеров — баг utf-8)
-├── generator.py               ✅ Responses API, стриминг, [END]
-├── rizalta_prompt_v2.py       ✅ Персона + техники + веб-стратегия
-├── rizalta_context.py         ✅ 5 корпусов, цены, ROI
+├── analyzer.py                ✅ LLM-Analyzer (stage + rag_query)
+├── rag_module.py              ✅ ChromaDB 1.5.0, 50 примеров
+├── generator.py               ✅ gpt-5.2, Responses API
+├── rizalta_prompt_v2.py       ✅ Промпт Маргариты
+├── rizalta_context.py         ✅ Объектный контекст RIZALTA
+├── .env                       ✅ Секреты (не в git)
+├── tests/                     ✅ 11 тест-файлов
 ├── widget/
-│   ├── index.html             ✅ Чат UI, RIZALTA design
-│   └── chat.js                ✅ SSE, localStorage, resume
-├── tests/                     ✅ 109 тестов
-├── data/                      ✅ properties.db, RAG, knowledge
+│   ├── index.html             ✅ Виджет чата
+│   └── chat.js                ✅ JS логика
+├── data/
+│   ├── properties.db          ✅ 348 лотов
+│   ├── rag_training_data/     ✅ 50 примеров + ChromaDB индекс
+│   └── ...                    ✅ Остальные данные
 ├── services/                  ✅ Калькуляторы
-├── refs/                      ✅ Sofia + Margarita референсы
-├── db/                        ✅ an_eva.db (создаётся автоматически)
-├── docs/                      ✅ Проектная документация
-└── .env                       ✅ API ключ (⚠️ перевыпустить!)
+├── db/                        ✅ Папка создана
+└── docs/                      ✅ Документация
 ```
 
+## 🔜 Следующий шаг
+1. Подключить виджет к eva-dev.rizaltaservice.ru для тестирования
+2. Прогнать полный сценарий: приветствие → квалификация → презентация → сбор контакта → [END]
+3. Реализовать стриминг (SSE) — критично для UX
+4. Перевыпустить OpenAI ключ
+
 ## ⚠️ Важный контекст для следующего чата
-- **СРОЧНО:** Перевыпустить OpenAI ключ (скомпрометирован)
-- Порт: 8005 (dev). Переход на 8001 (prod) — только после остановки старой Маргариты
-- Код в ветке functional-gopher-db8bc3, нужен merge в main
-- Все существующие сервисы НЕ ТРОГАТЬ
-- Вопрос: как организован внешний доступ (Cloudflare tunnel? nginx?) для webchat.rizaltaservice.ru
-- RAG не грузится из-за utf-8 ошибки — починить
-- Фазы 5-6 (данные RIZALTA + CRM/Observer) — после стабилизации внешнего доступа
+- АН Эва ЗАПУЩЕНА на :8005, доступна через eva-dev.rizaltaservice.ru
+- Процесс: 1Code (код) → merge+push (терминал MacBook) → pull+restart (сервер)
+- На сервере НИКОГДА не редактировать код (кроме .env). Исключение — hotfix с немедленным коммитом
+- RAG фикс был сделан на сервере и закоммичен оттуда (долг закрыт)
+- Cloudflare: eva-dev добавлен в PROD tunnel config.yml (не отдельный tunnel)
+- Старая Маргарита на :8001 — не трогать до полной готовности АН Эвы
