@@ -275,8 +275,6 @@ async def chat_stream(req: ChatRequest):
     user_id = await _get_or_create_user_id(req.session_id)
 
     async def event_stream():
-        # Cloudflare anti-buffering: 8KB padding
-        yield ": " + "x" * 8192 + "\n\n"
 
         await state_manager.save_message(req.session_id, user_id, "user", req.message.strip())
         history = await state_manager.get_history(req.session_id, limit=GENERATOR_HISTORY_LIMIT)
@@ -383,6 +381,19 @@ async def docs_current():
     path = BASE_DIR / "docs" / "AN_EVA_CURRENT.md"
     if not path.exists():
         raise HTTPException(status_code=404, detail="docs/AN_EVA_CURRENT.md not found")
+    content = path.read_text(encoding="utf-8")
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/api/docs/context")
+async def docs_context():
+    path = BASE_DIR / "docs" / "AN_EVA_CONTEXT.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="docs/AN_EVA_CONTEXT.md not found")
     content = path.read_text(encoding="utf-8")
     return Response(
         content=content,
