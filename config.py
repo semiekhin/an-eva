@@ -38,12 +38,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 LLM_MODEL = "gpt-5.2"
 
 # Extractor: быстрый NLU, ~10 полей
-EXTRACTOR_MODEL = LLM_MODEL
+EXTRACTOR_MODEL = "gpt-4o-mini"
 EXTRACTOR_MAX_TOKENS = 500
 EXTRACTOR_HISTORY_LIMIT = 6  # последних сообщений для контекста
 
 # Analyzer: определяет stage + rag_query
-ANALYZER_MODEL = LLM_MODEL
+ANALYZER_MODEL = "gpt-4o-mini"
 ANALYZER_MAX_TOKENS = 300
 ANALYZER_HISTORY_LIMIT = 20
 

@@ -2,7 +2,7 @@
 
 # АН Эва — AI-консультант RIZALTA v1.1.0
 
-📅 **Последняя сессия:** 17.02.2026
+📅 **Последняя сессия:** 18.02.2026
 **Статус:** MVP работает, SSE стримит в браузере, лиды уходят в Telegram
 
 ## Что это
@@ -27,7 +27,7 @@
 ## Стек
 
 - Python 3.12 + FastAPI + uvicorn
-- OpenAI Responses API (gpt-5.2) — extractor, analyzer, generator
+- OpenAI Responses API — extractor/analyzer (gpt-4o-mini), generator (gpt-5.2)
 - ChromaDB 1.5.0 — RAG (50 примеров)
 - aiosqlite (WAL mode) — состояние клиентов, история, сессии
 - aiohttp — отправка лидов в Telegram
@@ -45,9 +45,9 @@
   ├─ 2. get_history
   ├─ 3. process_message:
   │     ├─ get_state (SQLite)
-  │     ├─ extract (OpenAI gpt-5.2) → NLU: goal, budget, payment, objection...
+  │     ├─ extract (OpenAI gpt-4o-mini) → NLU: goal, budget, payment, objection...
   │     └─ merge_extraction → update_state (SQLite)
-  ├─ 4. analyze (OpenAI gpt-5.2) → stage + rag_query
+  ├─ 4. analyze (OpenAI gpt-4o-mini) → stage + rag_query
   ├─ 5. search_examples (ChromaDB) → RAG примеры (top 7)
   ├─ 6. build_system_prompt (persona + state + context + RAG)
   ├─ 7. generate_stream (OpenAI gpt-5.2, stream=True) → SSE токены
@@ -68,6 +68,7 @@
 | POST | `/api/chat/stream` | SSE стриминг (основной) |
 | GET | `/api/history/{session_id}` | История диалога |
 | GET | `/api/docs/current` | Текущий статус (MD, без кеша) |
+| GET | `/api/docs/context` | Полный контекст проекта (MD, без кеша) |
 | GET | `/widget/` | Статика виджета |
 
 ---
@@ -78,12 +79,12 @@
 /opt/an-eva/
 ├── main.py                  (401 строк) — FastAPI, endpoints, пайплайн, SSE
 ├── config.py                (95 строк)  — настройки, env-переменные, константы
-├── extractor.py             (319 строк) — NLU: извлечение данных из сообщений (OpenAI)
+├── extractor.py             (319 строк) — NLU: извлечение данных из сообщений (gpt-4o-mini)
 ├── state_manager.py         (365 строк) — SQLite: состояние клиента, история, сессии
 ├── message_processor.py     (87 строк)  — оркестратор: extractor → state → signals
-├── analyzer.py              (117 строк) — определение этапа диалога + RAG-запрос (OpenAI)
+├── analyzer.py              (117 строк) — определение этапа диалога + RAG-запрос (gpt-4o-mini)
 ├── rag_module.py            (232 строк) — ChromaDB: семантический поиск примеров
-├── generator.py             (213 строк) — генерация ответа, stream/non-stream (OpenAI)
+├── generator.py             (213 строк) — генерация ответа, stream/non-stream (gpt-5.2)
 ├── lead_notifier.py         (85 строк)  — отправка лидов в Telegram @RIZALTAEVA_bot
 ├── rizalta_prompt_v2.py     (262 строк) — системный промпт Маргариты (персона, техники)
 ├── rizalta_context.py       (65 строк)  — объектные данные RIZALTA (цены, корпуса, ROI)
@@ -140,18 +141,6 @@
 
 ---
 
-## .env (секреты на сервере)
-
-```
-OPENAI_API_KEY=<ротировать! ключ засвечен в чате>
-PORT=8005
-DEBUG=true
-TELEGRAM_BOT_TOKEN=8115075748:AAEIvLiJMPZLMe4jeZJ3aM_yqyr0RRcZEmA
-TELEGRAM_NOTIFY_CHAT_ID=512319063
-```
-
----
-
 ## ✅ Что работает
 
 - Полный пайплайн extractor → state → analyzer → RAG → generator ✅
@@ -168,42 +157,35 @@ TELEGRAM_NOTIFY_CHAT_ID=512319063
 
 ## ❌ Известные проблемы
 
-### Проблема 1: 7-10 сек до первого токена
-Три последовательных LLM-вызова: extractor (~3с) → analyzer (~2с) → RAG+generator (~2с).
-Для веб-чата неприемлемо, цель < 5 сек.
+### Проблема: ~11 сек до первого токена (отложена)
+Два последовательных LLM-вызова (extractor ~5с + analyzer ~2.3с) + RAG (~2.6с) + generator start (~0.6с).
+Промпт extractor-а ~250 строк — тяжёлый даже для gpt-4o-mini.
 
-**Решение (P1):**
-- `asyncio.gather(extractor, analyzer)` — параллельно, -3 сек
-- `gpt-4o-mini` для extractor/analyzer вместо gpt-5.2
-- Отправлять "typing" event сразу
-
-### Проблема 2: API ключ засвечен
-OpenAI API key был виден в чате. Нужна ротация.
+**Возможные решения (когда вернёмся к оптимизации):**
+- Объединить extractor + analyzer в один LLM-вызов
+- Упростить промпт extractor-а
+- Chat Completions API вместо Responses API (может быть быстрее)
+- Сервер в России, API в США — сетевая задержка неизбежна
 
 ---
 
 ## 🔜 Задачи (приоритет)
 
-### P1 — Скорость (следующая сессия):
-1. Параллельные вызовы extractor + analyzer (`asyncio.gather`)
-2. Быстрая модель для extractor/analyzer (`gpt-4o-mini` вместо `gpt-5.2`)
-3. Цель: < 5 сек до первого токена
+### P3 — Подключение к лендингу (следующая сессия):
+1. Посмотреть HTML лендинга rizaltabelokurikha.ru — как подключена старая Маргарита
+2. Заменить ссылку/iframe на АН Эву (eva-dev.rizaltaservice.ru)
+3. Лендинг на reg.ru (IP: 31.31.196.78, другой сервер)
+4. Мобильное тестирование
 
-### P2 — Стабилизация:
-4. Прогнать полный сценарий до [END] в разных вариациях
-5. Проверить greeting (один раз, без дублей)
-6. Ротировать OpenAI API ключ
+### P1 — Оптимизация скорости (отложена):
+5. Объединить extractor+analyzer в один вызов или упростить промпт
+6. Цель: < 5 сек до первого токена
 
-### P3 — Интеграция с лендингом:
-7. Подключить виджет к rizaltabelokurikha.ru
-8. Тестирование на мобильных устройствах
-9. Подготовка к рекламной кампании (Яндекс Директ)
-
-### P4 — Открытые вопросы:
-10. Observer (мониторинг в Telegram) — нужен ли?
-11. Deep links из Telegram бота в веб-чат
-12. Расширение RAG (больше примеров)
-13. Замена старой Маргариты (:8001 → :8005 переключение)
+### P4 — Дополнительное:
+7. Observer (мониторинг в Telegram)
+8. Deep links из Telegram бота в веб-чат
+9. Расширение RAG (больше примеров)
+10. Замена старой Маргариты (:8001 → :8005 переключение)
 
 ---
 
@@ -248,44 +230,17 @@ OpenAI API key был виден в чате. Нужна ротация.
 
 ---
 
-## Репозиторий
-
-- **GitHub:** https://github.com/semiekhin/an-eva
-- **Статус на сервере:** https://eva-dev.rizaltaservice.ru/api/docs/current
-
----
-
-## 📎 Ссылки на документы
+## 📎 Ссылки
 
 **Актуальные (сервер, без кеша):**
+- https://eva-dev.rizaltaservice.ru/api/docs/context
 - https://eva-dev.rizaltaservice.ru/api/docs/current
 
-**GitHub (может кешироваться до 10 мин):**
-- https://raw.githubusercontent.com/semiekhin/an-eva/main/docs/AN_EVA_CONTEXT.md
-- https://raw.githubusercontent.com/semiekhin/an-eva/main/docs/AN_EVA_CURRENT.md
-- https://raw.githubusercontent.com/semiekhin/an-eva/main/docs/AN_EVA_PROJECT.md
-- https://raw.githubusercontent.com/semiekhin/an-eva/main/docs/AN_EVA_KNOWLEDGE.md
+**GitHub:**
+- https://github.com/semiekhin/an-eva
 
----
-
-## Итоги сессии 17.02.2026 (сессии 2-4)
-
-**Что сделано:**
-- [x] Ядро написано: 25 файлов, 2756 строк
-- [x] Полный пайплайн работает
-- [x] SSE стриминг через nginx + Let's Encrypt (проблема CF решена)
-- [x] Лиды → Telegram при [END]
-- [x] Виджет: полный цикл greeting → квалификация → контакт → лид
-- [x] Cloudflare убран для eva-dev, DNS A-запись напрямую
-- [x] Padding убран (был костылём для CF)
-- [x] Сервис стабильно работает
-
-**Не сделано:**
-- [ ] Параллельные вызовы extractor + analyzer
-- [ ] Быстрая модель для extractor/analyzer
-- [ ] Ротация API ключа
-- [ ] Подключение к лендингу
-- [ ] Observer
+**Лендинг (целевой сайт):**
+- https://rizaltabelokurikha.ru (IP: 31.31.196.78, хостинг reg.ru)
 
 ---
 

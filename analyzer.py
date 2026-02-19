@@ -87,7 +87,6 @@ async def analyze(
             model=ANALYZER_MODEL,
             instructions=ANALYZER_PROMPT,
             input=analyzer_input,
-            reasoning={"effort": "medium"},
             max_output_tokens=ANALYZER_MAX_TOKENS,
         )
         raw = response.output_text or ""

@@ -1,15 +1,14 @@
 # Текущий статус АН Эва
 
-📅 **Последняя сессия:** 17.02.2026, 21:30 MSK
-**Фаза:** MVP работает
+📅 **Последняя сессия:** 18.02.2026, 12:30 MSK
+**Фаза:** MVP работает, готовимся к подключению на лендинг
 
-## ✅ Что сделано 17.02.2026
+## ✅ Что сделано 17-18.02.2026 (сессии 2-4)
 
 ### Сессия 2 (1Code):
 - Написано ядро: 25 файлов, 2756 строк
 - Полный пайплайн: extractor → state → analyzer → RAG → generator
 - systemd сервис запущен на :8005
-- Cloudflare tunnel eva-dev настроен
 - RAG починен (ChromaDB 1.5.0)
 
 ### Сессия 3 (Claude.ai):
@@ -23,31 +22,37 @@
   - A-запись eva-dev → 72.56.64.91 (DNS only, без proxy)
   - nginx reverse proxy с `proxy_buffering off`
   - SSL certbot автообновление
-- Убран padding (8KB крестиков — был костылём для CF)
-- **Полный цикл проверен в браузере:** greeting → квалификация → контакт → лид в Telegram
+- Убран padding (8KB крестиков — костыль для CF)
+- Полный цикл проверен в браузере: greeting → квалификация → контакт → лид ✅
+- Extractor/Analyzer переключены на gpt-4o-mini (убран reasoning.effort для совместимости)
+- Создан AN_EVA_CONTEXT.md — полная документация проекта
+- Эндпоинт `/api/docs/context` — отдаёт контекст без кеша для новых чатов
+- API ключ ротирован ✅
+- Сценарии прогнаны в браузере ✅
 
 ## 🔄 Текущее состояние
 ### Работает:
 - АН Эва на :8005 через systemd ✅
-- eva-dev.rizaltaservice.ru — nginx + SSL ✅
+- eva-dev.rizaltaservice.ru — nginx + SSL (без Cloudflare) ✅
 - SSE стриминг в браузере ✅
-- Полный пайплайн: extractor → state → analyzer → RAG → generator ✅
+- Полный пайплайн: extractor (gpt-4o-mini) → state → analyzer (gpt-4o-mini) → RAG → generator (gpt-5.2) ✅
 - Лиды → Telegram при [END] ✅
+- /api/docs/context — актуальный контекст для новых чатов ✅
 - GitHub синхронизирован ✅
 - Старая Маргарита на :8001 — работает параллельно ✅
 
 ### Не сделано:
-- Параллельные вызовы extractor + analyzer (7-10 сек до первого токена)
-- Быстрая модель для extractor/analyzer (gpt-4o-mini)
-- Ротация OpenAI API ключа
-- Подключение виджета к лендингу rizaltabelokurikha.ru
+- Подключение виджета к лендингу rizaltabelokurikha.ru (P3 — следующий шаг)
+- Оптимизация скорости (~11 сек до первого токена) — отложена
 - Observer (мониторинг в Telegram)
 
 ## 🔜 Следующие задачи (приоритет)
-1. **P1:** asyncio.gather(extractor, analyzer) + gpt-4o-mini → цель < 5 сек
-2. **P2:** Прогнать сценарии, ротировать API ключ
-3. **P3:** Подключить виджет к лендингу, мобильное тестирование
-4. **P4:** Observer, deep links, расширение RAG
+1. **P3 (следующая сессия):** Подключить виджет к лендингу rizaltabelokurikha.ru
+   - Лендинг на reg.ru (IP: 31.31.196.78, другой сервер)
+   - Нужно посмотреть HTML лендинга — как подключена старая Маргарита
+   - Заменить ссылку/iframe на АН Эву
+2. **P1 (отложена):** Оптимизация скорости — объединить extractor+analyzer в один вызов, или оптимизировать промпт
+3. **P4:** Observer, deep links, расширение RAG, замена старой Маргариты
 
 ## ⚠️ Важный контекст
 - Порт: 8005 (dev), 8001 только после замены старой Маргариты
@@ -56,3 +61,4 @@
 - Процесс: 1Code → merge+push → pull+restart на сервере
 - Лиды отправлять Sergio лично в Telegram, НЕ в Bitrix CRM
 - nginx конфиг: /etc/nginx/sites-enabled/eva-dev
+- Контекст для нового чата: https://eva-dev.rizaltaservice.ru/api/docs/context
