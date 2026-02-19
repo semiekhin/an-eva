@@ -1,13 +1,13 @@
 # ⚠️ СУЩЕСТВУЮЩИЕ СЕРВИСЫ НЕ ТРОГАТЬ! ПОРТ 8005 (DEV)! ⚠️
 
-# АН Эва — AI-консультант RIZALTA v1.1.0
+# АН Эва — AI-консультант RIZALTA v1.2.0
 
-📅 **Последняя сессия:** 18.02.2026
-**Статус:** MVP работает, SSE стримит в браузере, лиды уходят в Telegram
+📅 **Последнее обновление:** 19.02.2026 (сессия 5)
+**Статус:** Виджет на боевом лендинге, воронка в доработке
 
 ## Что это
 
-Веб-чат виджет с AI-консультантом «Маргарита» для лендинга rizaltabelokurikha.ru. Квалифицирует клиентов → презентует инвестиционные апартаменты → собирает контакт → отправляет лид в Telegram.
+Веб-чат виджет с AI-консультантом **«Марго»** для лендинга rizaltabelokurikha.ru. Квалифицирует клиентов → презентует инвестиционные апартаменты → собирает контакт → отправляет лид в Telegram.
 
 Архитектура основана на Sofia-GPT v3.0: Extractor → LLM-Analyzer → RAG → Generator.
 
@@ -20,6 +20,7 @@
 - **Порт:** 8005 (dev) → 8001 только после замены старой Маргариты
 - **systemd:** `an-eva.service` (enabled, active)
 - **Домен:** `eva-dev.rizaltaservice.ru` → A-запись 72.56.64.91 (DNS only, nginx + Let's Encrypt)
+- **Лендинг:** `rizaltabelokurikha.ru` (reg.ru, IP 31.31.196.78) — виджет подключён
 - **GitHub:** github.com/semiekhin/an-eva (public)
 - **Разработка:** 1Code на MacBook `~/Projects/an-eva/` → merge+push → pull+restart на сервере
 - **Worktree 1Code:** `~/.21st/worktrees/an-eva/` — коммитить и мержить вручную
@@ -27,11 +28,11 @@
 ## Стек
 
 - Python 3.12 + FastAPI + uvicorn
-- OpenAI Responses API — extractor/analyzer (gpt-4o-mini), generator (gpt-5.2)
+- OpenAI Responses API: **gpt-4o-mini** (extractor, analyzer), **gpt-5.2** (generator)
 - ChromaDB 1.5.0 — RAG (50 примеров)
 - aiosqlite (WAL mode) — состояние клиентов, история, сессии
 - aiohttp — отправка лидов в Telegram
-- Vanilla JS виджет (без фреймворков)
+- Vanilla JS виджет — embeddable `chat-widget.js` (без фреймворков)
 - nginx + Let's Encrypt (reverse proxy, SSE без буферизации)
 
 ---
@@ -39,7 +40,7 @@
 ## Пайплайн обработки сообщения
 
 ```
-Клиент → виджет → POST /api/chat/stream
+Клиент → виджет на rizaltabelokurikha.ru → POST /api/chat/stream (eva-dev.rizaltaservice.ru)
   │
   ├─ 1. save_message (user)
   ├─ 2. get_history
@@ -55,6 +56,8 @@
   └─ 9. save_message (assistant)
 ```
 
+Extractor и analyzer последовательны (analyzer зависит от extractor). Параллелизация невозможна.
+
 ---
 
 ## Endpoints
@@ -67,8 +70,8 @@
 | POST | `/api/chat` | Синхронный ответ (без стриминга) |
 | POST | `/api/chat/stream` | SSE стриминг (основной) |
 | GET | `/api/history/{session_id}` | История диалога |
+| GET | `/api/docs/context` | Этот файл (MD, без кеша) |
 | GET | `/api/docs/current` | Текущий статус (MD, без кеша) |
-| GET | `/api/docs/context` | Полный контекст проекта (MD, без кеша) |
 | GET | `/widget/` | Статика виджета |
 
 ---
@@ -77,115 +80,173 @@
 
 ```
 /opt/an-eva/
-├── main.py                  (401 строк) — FastAPI, endpoints, пайплайн, SSE
-├── config.py                (95 строк)  — настройки, env-переменные, константы
-├── extractor.py             (319 строк) — NLU: извлечение данных из сообщений (gpt-4o-mini)
-├── state_manager.py         (365 строк) — SQLite: состояние клиента, история, сессии
-├── message_processor.py     (87 строк)  — оркестратор: extractor → state → signals
-├── analyzer.py              (117 строк) — определение этапа диалога + RAG-запрос (gpt-4o-mini)
-├── rag_module.py            (232 строк) — ChromaDB: семантический поиск примеров
-├── generator.py             (213 строк) — генерация ответа, stream/non-stream (gpt-5.2)
-├── lead_notifier.py         (85 строк)  — отправка лидов в Telegram @RIZALTAEVA_bot
-├── rizalta_prompt_v2.py     (262 строк) — системный промпт Маргариты (персона, техники)
-├── rizalta_context.py       (65 строк)  — объектные данные RIZALTA (цены, корпуса, ROI)
+├── main.py                  — FastAPI, endpoints, пайплайн, SSE
+├── config.py                — настройки, env-переменные, константы, CORS
+├── extractor.py             — NLU: извлечение данных из сообщений (gpt-4o-mini)
+├── state_manager.py         — SQLite: состояние клиента, история, сессии
+├── message_processor.py     — оркестратор: extractor → state → signals
+├── analyzer.py              — определение этапа диалога + RAG-запрос (gpt-4o-mini)
+├── rag_module.py            — ChromaDB: семантический поиск примеров
+├── generator.py             — генерация ответа, stream/non-stream (gpt-5.2)
+├── lead_notifier.py         — отправка лидов в Telegram @RIZALTAEVA_bot
+├── rizalta_prompt_v2.py     — системный промпт Марго (персона, техники, воронка)
+├── rizalta_context.py       — объектные данные RIZALTA (корпуса, витрина лотов, цены)
 ├── .env                     — секреты (не в git)
-├── .gitignore
-├── PHASE1_SPEC.md … PHASE4_SPEC.md — спецификации фаз разработки
 │
 ├── widget/
-│   ├── index.html           (283 строк) — HTML виджета (CSS внутри)
-│   └── chat.js              (327 строк) — JS: SSE + fallback на /api/chat
+│   ├── index.html           — HTML виджета (standalone, для тестирования)
+│   ├── chat.js              — JS виджета (standalone)
+│   └── chat-widget.js       — EMBEDDABLE виджет (подключён к лендингу)
 │
 ├── data/
-│   ├── properties.db        — 348 лотов (Family 255 + Business 103)
-│   ├── corp3_units.json     — корпус Digital (128 avail / 154 sold)
+│   ├── properties.db        — Family 255 лотов + Business 105 лотов (SQLite)
+│   ├── corp3_units.json     — Digital 128 available (JSON)
 │   ├── units.json           — все юниты
 │   ├── rizalta_knowledge.md — база знаний о RIZALTA
-│   ├── chroma_db/           — основная ChromaDB (коллекция rizalta_sales)
-│   └── rag_training_data/   — 50 RAG-примеров + ChromaDB
-│       └── examples.json
+│   ├── chroma_db/           — основная ChromaDB
+│   └── rag_training_data/   — 50 RAG-примеров
 │
 ├── db/
 │   └── an_eva.db            — SQLite: сессии, состояния, история (WAL mode)
 │
-├── services/
+├── services/                — НЕ подключены к пайплайну (будущий function calling)
 │   ├── investment_calc.py   — калькулятор ROI
 │   ├── installment_calculator.py — рассрочка
 │   ├── deposit_calculator.py — сравнение с депозитом
 │   └── calculations.py      — общие расчёты
 │
 ├── docs/
-│   ├── AN_EVA_CONTEXT.md    — этот файл (полный контекст проекта)
-│   ├── AN_EVA_CURRENT.md    — текущий статус (обновляется каждую сессию)
-│   ├── AN_EVA_PROJECT.md    — проектный документ (архитектура, ТЗ)
-│   ├── AN_EVA_KNOWLEDGE.md  — база знаний
-│   ├── SESSION_END_TEMPLATE.md — шаблон завершения сессии
-│   └── CHANGELOG.md
+│   ├── AN_EVA_CONTEXT.md    — этот файл
+│   ├── AN_EVA_CURRENT.md    — текущий статус
+│   ├── AN_EVA_PROJECT.md    — проектный документ
+│   └── AN_EVA_KNOWLEDGE.md  — база знаний
 │
 ├── refs/                    — референсные файлы (read-only)
-│   ├── sofia/               — архитектура Sofia-GPT
-│   └── margarita/           — старая Маргарита (виджет, промпт)
-│
-└── tests/                   — 11 тестовых файлов
+└── tests/
 ```
-
-**Всего:** ~2756 строк кода (без тестов, данных, документации)
 
 ---
 
-## Корпуса RIZALTA
+## Корпуса RIZALTA (продаются три)
 
-- **Корпус 1 «Family»:** 255 лотов (properties.db)
-- **Корпус 2 «Business»:** 103 лота (properties.db) — СКРЫТ
-- **Корпус 3 «Digital»:** 128 available / 154 sold (corp3_units.json, whitelist)
+| Корпус | Лотов avail | Площадь | Цена от | Источник |
+|--------|-------------|---------|---------|----------|
+| Family (1) | 255 | 22–85 м² | 14.3 млн | properties.db |
+| Business (2) | 105 | 24.5–113 м² | 18.8 млн | properties.db |
+| Digital (3) | 128 | 23.5–152 м² | 14.5 млн | corp3_units.json |
+
+Legend и Wellness — НЕ продаются, убраны из контекста.
+
+### Витрина лотов (в rizalta_context.py):
+- Family, 22 м², 6 этаж — 14.3 млн (точка входа)
+- Family, 40.9 м², 9 этаж — 25.8 млн
+- Digital, 23.5 м², 6 этаж — 14.5 млн
+- Digital, 41.5 м², 1 этаж — 24.4 млн
+- Business, 24.5 м², 2 этаж — 18.8 млн
+- Business, 80 м², 9 этаж — 56.7 млн
+
+---
+
+## Виджет на лендинге
+
+**Как подключён:**
+На `rizaltabelokurikha.ru` (reg.ru) одна строка перед `</body>`:
+```html
+<script src="https://eva-dev.rizaltaservice.ru/widget/chat-widget.js"></script>
+```
+
+**Что делает chat-widget.js:**
+- Самодостаточный embeddable скрипт (инжектит HTML+CSS+JS)
+- Экспортирует `window.openBot()` — 3 кнопки на лендинге вызывают эту функцию
+- SSE стриминг + fallback на `/api/chat`
+- Сессии с persistence (localStorage)
+- Мобильная адаптация (fullscreen на <480px)
+- Quick replies: «Рассчитать доход», «Цены и планировки», «Запланировать онлайн-показ»
+- Постоянная кнопка: «📞 Связаться с отделом продаж»
+
+**CORS настроен** в config.py — rizaltabelokurikha.ru в списке разрешённых.
+
+---
+
+## .env (секреты на сервере)
+
+```
+OPENAI_API_KEY=<ротирован 17.02>
+PORT=8005
+DEBUG=true
+TELEGRAM_BOT_TOKEN=8115075748:AAEIvLiJMPZLMe4jeZJ3aM_yqyr0RRcZEmA
+TELEGRAM_NOTIFY_CHAT_ID=512319063
+```
 
 ---
 
 ## ✅ Что работает
 
+- Виджет на боевом лендинге rizaltabelokurikha.ru ✅
+- Марго (не Маргарита) — ребрендинг завершён ✅
 - Полный пайплайн extractor → state → analyzer → RAG → generator ✅
 - SSE стриминг в браузере через nginx + Let's Encrypt ✅
 - Синхронный /api/chat (fallback) ✅
 - Лиды → @RIZALTAEVA_bot в Telegram при [END] ✅
-- [END] фильтрация в потоке (буферизация токенов) ✅
-- Виджет: greeting, диалог, сбор контакта — полный цикл ✅
-- Сессии с persistence (localStorage) ✅
-- RAG — 50 примеров, семантический поиск по stage ✅
-- Старая Маргарита на :8001 — работает параллельно ✅
+- [END] фильтрация в потоке ✅
+- Реальные цены: Family от 14.3, Business от 18.8, Digital от 14.5 млн ✅
+- Витрина 6 лотов из базы ✅
+- Телефон убран — Марго только собирает контакт клиента ✅
+- API ключ ротирован ✅
+- gpt-4o-mini для extractor/analyzer ✅
+- RAG — 50 примеров, семантический поиск ✅
+- Старая Маргарита на :8001 — работает параллельно (можно гасить) ✅
 
 ---
 
 ## ❌ Известные проблемы
 
-### Проблема: ~11 сек до первого токена (отложена)
-Два последовательных LLM-вызова (extractor ~5с + analyzer ~2.3с) + RAG (~2.6с) + generator start (~0.6с).
-Промпт extractor-а ~250 строк — тяжёлый даже для gpt-4o-mini.
-
-**Возможные решения (когда вернёмся к оптимизации):**
-- Объединить extractor + analyzer в один LLM-вызов
-- Упростить промпт extractor-а
-- Chat Completions API вместо Responses API (может быть быстрее)
-- Сервер в России, API в США — сетевая задержка неизбежна
+### Скорость: ~11 сек до первого токена
+Три последовательных LLM-вызова. Параллелизация невозможна (analyzer зависит от extractor).
+gpt-4o-mini для extractor/analyzer уже применён. Отложено — вернёмся позже.
 
 ---
 
 ## 🔜 Задачи (приоритет)
 
-### P3 — Подключение к лендингу (следующая сессия):
-1. Посмотреть HTML лендинга rizaltabelokurikha.ru — как подключена старая Маргарита
-2. Заменить ссылку/iframe на АН Эву (eva-dev.rizaltaservice.ru)
-3. Лендинг на reg.ru (IP: 31.31.196.78, другой сервер)
-4. Мобильное тестирование
+### P1 — Воронка и приветствие (СЛЕДУЮЩАЯ СЕССИЯ):
 
-### P1 — Оптимизация скорости (отложена):
-5. Объединить extractor+analyzer в один вызов или упростить промпт
-6. Цель: < 5 сек до первого токена
+**1. Новое приветствие (greeting)**
+Найти: `grep -n greeting /opt/an-eva/main.py`
+Должно содержать:
+- Представление Марго как помощника-консультанта
+- Что может: цены, планировки, расчёт дохода, вопросы по ДДУ и договору с УК
+- Минимальная цена от 14.3 млн (фильтр холодных лидов)
+- Окупаемость ~6.5 лет
 
-### P4 — Дополнительное:
-7. Observer (мониторинг в Telegram)
-8. Deep links из Telegram бота в веб-чат
-9. Расширение RAG (больше примеров)
-10. Замена старой Маргариты (:8001 → :8005 переключение)
+**2. Воронка с МГП-крючком**
+МГП = минимальный гарантированный доход (фиксируется в договоре).
+Размер и срок МГП сообщает только менеджер.
+Стратегия:
+- Приветствие → цена фильтрует холодных
+- 2 вопроса: бюджет + сроки инвестиции (НЕ 4 вопроса подряд — это допрос)
+- Ценность: конкретный лот + примерный расчёт дохода
+- МГП как крючок: «В договоре фиксируется минимальный гарантированный доход. Детали подготовит менеджер — оставьте номер)»
+- Контакт → [END]
+
+**3. Quick replies под воронку**
+Обновить стартовые и после-ответные кнопки
+
+**4. Правила промпта**
+- Марго НИКОГДА не даёт телефон отдела продаж (уже сделано)
+- Марго упоминает факт МГП но НЕ называет цифры
+- Тёплый клиент = тот кто продолжил после цены 14.3 млн и задаёт конкретные вопросы
+
+### P2 — Скорость (отложено):
+- ~11 сек до первого токена
+- Варианты: gpt-4o-mini для generator, кеширование RAG, оптимизация промптов
+
+### P3 — Расширение:
+- Подключение services/ через function calling (investment_calc, installment_calc, deposit_calc)
+- Расширение RAG
+- Observer (мониторинг в Telegram)
+- Замена старой Маргариты (:8001 → гасить)
+- Софья (Telegram-бот как второй этап воронки) — отложено, сначала статистика MVP
 
 ---
 
@@ -196,7 +257,7 @@
 | Sofia-GPT | `/opt/sofia-gpt/` | — | 🔒 НЕ ТРОГАТЬ |
 | RIZALTA Bot PROD | `/opt/bot/` | 8000 | 🔒 НЕ ТРОГАТЬ |
 | RIZALTA Bot DEV | `/opt/bot-dev/` | 8002 | 🔒 НЕ ТРОГАТЬ |
-| WebChat (старая Маргарита) | `/opt/rizalta-webchat/` | 8001 | 🔒 НЕ ТРОГАТЬ (до замены) |
+| WebChat (старая) | `/opt/rizalta-webchat/` | 8001 | 🔒 Можно гасить |
 | WebApp PROD | — | 8003 | 🔒 НЕ ТРОГАТЬ |
 | WebApp DEV | — | 8004 | 🔒 НЕ ТРОГАТЬ |
 
@@ -207,7 +268,7 @@
 1. **1Code (MacBook):** пишем код в `~/Projects/an-eva/`
 2. **Merge + push:** `cd ~/Projects/an-eva && git merge <branch> && git push`
 3. **Сервер:** `cd /opt/an-eva && git pull && systemctl restart an-eva`
-4. **На сервере НЕ редактировать** код (кроме .env и hotfix с немедленным коммитом)
+4. **На сервере НЕ редактировать** код (кроме .env и hotfix)
 5. **Hotfix на сервере:** `git add -A && git commit -m "hotfix: ..." && git push` → потом pull на MacBook
 
 ---
@@ -230,19 +291,30 @@
 
 ---
 
-## 📎 Ссылки
+## Ссылки
 
-**Актуальные (сервер, без кеша):**
-- https://eva-dev.rizaltaservice.ru/api/docs/context
-- https://eva-dev.rizaltaservice.ru/api/docs/current
-
-**GitHub:**
-- https://github.com/semiekhin/an-eva
-
-**Лендинг (целевой сайт):**
-- https://rizaltabelokurikha.ru (IP: 31.31.196.78, хостинг reg.ru)
+- **GitHub:** https://github.com/semiekhin/an-eva
+- **Контекст (этот файл):** https://eva-dev.rizaltaservice.ru/api/docs/context
+- **Статус:** https://eva-dev.rizaltaservice.ru/api/docs/current
+- **Лендинг:** https://rizaltabelokurikha.ru
 
 ---
 
-Перед началом работы уточни: есть ли доступ к серверу?
-Если нужны детали — читай документацию: `cat /opt/an-eva/docs/AN_EVA_*.md`
+## История сессий
+
+### Сессии 2-4 (17.02.2026):
+- Ядро написано: 25 файлов, ~2756 строк
+- Полный пайплайн, SSE, лиды в Telegram
+- gpt-4o-mini для extractor/analyzer
+- API ключ ротирован
+- Сценарии прогнаны
+
+### Сессия 5 (19.02.2026):
+- Embeddable виджет chat-widget.js подключён к лендингу
+- Ребрендинг Маргарита → Марго
+- Цены актуализированы (14.3 / 18.8 / 14.5 млн)
+- Legend и Wellness убраны
+- Витрина 6 лотов из реальной базы
+- Телефон убран, только сбор контакта
+- Постоянная кнопка «Связаться с отделом продаж»
+- Согласована воронка: цена-фильтр → 2 вопроса → ценность → МГП-крючок → контакт
