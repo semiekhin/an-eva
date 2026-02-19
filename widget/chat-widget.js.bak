@@ -423,9 +423,9 @@
       localStorage.setItem('rz_session_id', sessionId);
       addMessage(data.greeting, 'bot');
       showQuickReplies([
-        'Какие есть варианты?',
-        'Рассчитать доход',
-        'Как работает гарантия дохода?'
+        '\u0420\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044C \u0434\u043E\u0445\u043E\u0434',
+        '\u0426\u0435\u043D\u044B \u0438 \u043F\u043B\u0430\u043D\u0438\u0440\u043E\u0432\u043A\u0438',
+        '\u0417\u0430\u043F\u043B\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043E\u043D\u043B\u0430\u0439\u043D-\u043F\u043E\u043A\u0430\u0437'
       ]);
       sessionPromise = null;
       return sessionId;
