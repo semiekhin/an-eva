@@ -11,6 +11,7 @@ import uuid
 import json as json_module
 import logging
 from datetime import datetime
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -281,6 +282,7 @@ async def chat_stream(req: ChatRequest):
 
         yield ": processing\n\n"
 
+        t0 = time.monotonic()
         result = await process_message(
             user_id=user_id,
             message=req.message.strip(),
@@ -288,15 +290,20 @@ async def chat_stream(req: ChatRequest):
             state_manager=state_manager,
         )
         client_state = result["client_state"]
+        t1 = time.monotonic()
+        log.info(f"[perf] extractor: {t1-t0:.2f}s")
 
         yield ": analyzing\n\n"
 
+        t2 = time.monotonic()
         analysis = await analyze(
             message=req.message.strip(),
             history=history,
             client_state=client_state,
         )
         stage = analysis["stage"]
+        t3 = time.monotonic()
+        log.info(f"[perf] analyzer: {t3-t2:.2f}s")
         rag_query = analysis["rag_query"]
         log.info(f"[stream] user={user_id}: stage={stage}, query=\'{rag_query[:30]}\'")
 
@@ -307,6 +314,9 @@ async def chat_stream(req: ChatRequest):
         rizalta_context = get_rizalta_context()
         system_prompt = get_system_prompt(state_summary, rizalta_context, examples_prompt)
 
+        t4 = time.monotonic()
+        log.info(f"[perf] pre-generate (RAG+prompt): {t4-t3:.2f}s")
+        log.info(f"[perf] TOTAL before stream: {t4-t0:.2f}s")
         full_reply = ""
         ended = False
         finish_type = None

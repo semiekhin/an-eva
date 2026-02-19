@@ -55,7 +55,6 @@ async def generate(
             model=GENERATOR_MODEL,
             instructions=system_prompt,
             input=messages,
-            reasoning={"effort": "high"},
             max_output_tokens=GENERATOR_MAX_TOKENS,
         )
         answer = response.output_text or ""
@@ -111,7 +110,6 @@ async def generate_stream(
             model=GENERATOR_MODEL,
             instructions=system_prompt,
             input=messages,
-            reasoning={"effort": "high"},
             max_output_tokens=GENERATOR_MAX_TOKENS,
             stream=True,
         )

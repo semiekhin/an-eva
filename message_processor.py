@@ -59,14 +59,9 @@ async def process_message(
     client_state = await state_manager.update_state(user_id, state_updates)
 
     # 5. Signals — латентные метрики
-    signals = extraction.get("signals", {})
-    if signals:
-        await state_manager.update_state(user_id, {
-            "friction": signals.get("friction", 0.3),
-            "call_readiness": signals.get("call_readiness", 0.5),
-            "engagement": signals.get("engagement", "medium"),
-            "urgency": signals.get("urgency", "unclear"),
-        })
+    # urgency теперь на верхнем уровне extraction
+    urgency = extraction.get("urgency") or "unclear"
+    await state_manager.update_state(user_id, {"urgency": urgency})
 
     # 6. Счётчик запросов материалов
     if extraction.get("wants_materials"):

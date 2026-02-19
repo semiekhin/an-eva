@@ -14,176 +14,35 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 
 EXTRACTOR_SYSTEM_PROMPT = """
-Ты — модуль извлечения информации из сообщений клиентов консультанта по недвижимости RIZALTA Resort Belokurikha.
+Извлеки информацию из сообщения клиента RIZALTA Resort Belokurikha (курортные апартаменты, Алтай). Верни JSON.
 
-ЗАДАЧА: Извлечь информацию из сообщения и вернуть JSON.
+КОНТЕКСТ ОТВЕТА:
+- answered_last_bot_question: "yes"/"no"/"partial"
+- target_slot: "goal"/"budget"/"payment_type"/null
+- answer_mode: "value"/"unknown"/"refusal"/"deferred"/"counter_question"/"off_topic"/null
 
-═══════════════════════════════════════════════════════════════════════════════
-КОНТЕКСТ: RIZALTA Resort Belokurikha — курортный комплекс на Алтае.
-Корпуса: Family (20-60 м²), Business (40-120 м²), Digital (20-40 м²).
-Один объект — локацию извлекать не нужно.
-═══════════════════════════════════════════════════════════════════════════════
+ПРАВИЛО CONFIDENCE:
+Если answer_mode НЕ "value" → все *_confidence = null.
+- confirmed = клиент ЯВНО говорит о СВОИХ намерениях ("мой бюджет 10 млн")
+- mentioned = упоминает, не подтверждая ("видел у вас за 8 млн")
 
-СНАЧАЛА ОПРЕДЕЛИ КОНТЕКСТ ОТВЕТА:
+ПОЛЯ:
+- goal: "investment"/"personal"/null, goal_confidence
+- budget: число в рублях (10 млн=10000000), budget_confidence
+- payment_type: "full"/"mortgage"/"installment"/"any"/null, payment_type_confidence
+- preferred_corpus: "family"/"business"/"digital"/null
+- preferred_area: "small"(до 30м²)/"medium"(30-60)/"large"(60+)/null
+- question_type: "price"/"availability"/"process"/"mortgage_rate"/"profitability"/"corpus_info"/"location_info"/null
+- objection: "expensive"/"think"/"far"/"construction"/"management"/"no_call"/null
+- wants_materials: true/false
+- contact_given: true/false (дал телефон или @telegram)
+- meeting_agreed: true/false
+- mentioned_price: число/null
+- sentiment: "positive"/"neutral"/"negative"/"frustrated"
+- urgency: "now"/"week"/"month"/"unclear"
 
-1. answered_last_bot_question — клиент ответил на последний вопрос бота?
-   - "yes" — да, ответил (даже если "не знаю")
-   - "no" — нет, проигнорировал или сменил тему
-   - "partial" — частично ответил
-
-2. target_slot — на какой слот был вопрос бота?
-   - "goal" / "budget" / "payment_type" / null
-
-3. answer_mode — КАК клиент ответил?
-   - "value" — дал конкретное значение
-   - "unknown" — не знает
-   - "needs_recommendation" — просит совет
-   - "refusal" — отказ отвечать
-   - "deferred" — отложил
-   - "counter_question" — встречный вопрос
-   - "off_topic" — не по теме
-
-═══════════════════════════════════════════════════════════════════════════════
-КРИТИЧЕСКОЕ ПРАВИЛО — CONFIDENCE И ANSWER_MODE:
-═══════════════════════════════════════════════════════════════════════════════
-
-Если answer_mode НЕ "value", то ВСЕ *_confidence = null.
-
-- answer_mode="value" → можно ставить confirmed/mentioned
-- Иначе → все *_confidence: null
-
-Исключение: обобщающие ответы ("любой вариант", "без разницы") — это value.
-
-═══════════════════════════════════════════════════════════════════════════════
-РАЗЛИЧАЙ ТРИ ТИПА ИНФОРМАЦИИ:
-═══════════════════════════════════════════════════════════════════════════════
-
-1. ПОДТВЕРЖДЁННЫЙ ФАКТ (confidence: "confirmed")
-   Клиент ЯВНО говорит о СВОИХ намерениях.
-   "Мой бюджет 10 млн" → budget: 10000000, budget_confidence: "confirmed"
-   "Для инвестиций" → goal: "investment", goal_confidence: "confirmed"
-
-2. УПОМИНАНИЕ (confidence: "mentioned")
-   Клиент упоминает, но НЕ подтверждает как свой выбор.
-   "Видел у вас за 8 млн" → mentioned_price: 8000000
-
-3. ВОПРОС (question_type)
-   "Какие цены?" → question_type: "price"
-   "Какая доходность?" → question_type: "profitability"
-
-═══════════════════════════════════════════════════════════════════════════════
-ПРАВИЛА ИЗВЛЕЧЕНИЯ ПОЛЕЙ:
-═══════════════════════════════════════════════════════════════════════════════
-
-goal (цель покупки):
-- "investment" — инвестиция, вложение, заработать, сдавать, доход
-- "personal" — для себя, жить, отдыхать, семья
-- null — если неясно
-
-budget (бюджет в рублях):
-- Число: "10 млн" → 10000000, "до 15" → 15000000
-- "от 5 до 10" → 10000000 (верхняя граница)
-- null — если не указан
-
-payment_type (способ оплаты):
-- "full" — полная оплата, наличные
-- "mortgage" — ипотека
-- "installment" — рассрочка
-- "any" — любой вариант (явный выбор "без разницы")
-- null — если не упоминалось
-
-preferred_corpus (предпочтительный корпус):
-- "family" — Family
-- "business" — Business
-- "digital" — Digital
-- null — если не указан
-
-preferred_area (предпочтительная площадь):
-- "small" — до 30 м² (студия, компактный)
-- "medium" — 30-60 м² (однушка, двушка)
-- "large" — 60+ м² (большая, просторная)
-- null — если не указано
-
-question_type (тип вопроса клиента):
-- "price" — цены
-- "availability" — наличие, что есть
-- "process" — процесс покупки
-- "mortgage_rate" — ставки ипотеки
-- "profitability" — доходность, ROI, сравнение с депозитом
-- "corpus_info" — информация о корпусах
-- "location_info" — про Белокуриху / Алтай
-- null — не задаёт вопрос
-
-objection (возражение):
-- "expensive" — дорого
-- "think" — подумаю, не сейчас
-- "far" — далеко, Белокуриха далеко, не море
-- "construction" — стройка, ждать долго
-- "management" — кто будет управлять
-- "no_call" — не хочу созвон, только переписка
-- null — нет возражения
-
-wants_materials (просит материалы):
-- true — явная просьба отправить/скинуть КП, презентацию
-- false — всё остальное
-
-contact_given (дал контакт):
-- true — дал телефон или @telegram
-- false — не дал
-
-meeting_agreed (согласился на онлайн-показ):
-- true — явное согласие на показ/созвон
-- false — всё остальное
-
-sentiment:
-- "positive" / "neutral" / "negative" / "frustrated"
-
-signals (латентные метрики):
-- friction (0.0-1.0): уровень сопротивления
-- call_readiness (0.0-1.0): готовность к созвону/показу
-- engagement: "low" / "medium" / "high"
-- urgency: "now" / "week" / "month" / "unclear"
-
-═══════════════════════════════════════════════════════════════════════════════
-ФОРМАТ ОТВЕТА — ТОЛЬКО JSON:
-═══════════════════════════════════════════════════════════════════════════════
-
-{
-  "answered_last_bot_question": "yes" | "no" | "partial",
-  "answer_mode": "value" | "unknown" | "needs_recommendation" | "refusal" | "deferred" | "counter_question" | "off_topic" | null,
-  "target_slot": "goal" | "budget" | "payment_type" | null,
-
-  "goal": "investment" | "personal" | null,
-  "goal_confidence": "confirmed" | "mentioned" | null,
-
-  "budget": 10000000 | null,
-  "budget_confidence": "confirmed" | "mentioned" | null,
-
-  "payment_type": "full" | "mortgage" | "installment" | "any" | null,
-  "payment_type_confidence": "confirmed" | "mentioned" | null,
-
-  "preferred_corpus": "family" | "business" | "digital" | null,
-  "preferred_area": "small" | "medium" | "large" | null,
-
-  "question_type": "price" | "availability" | "process" | "mortgage_rate" | "profitability" | "corpus_info" | "location_info" | null,
-  "objection": "expensive" | "think" | "far" | "construction" | "management" | "no_call" | null,
-  "wants_materials": true | false,
-  "contact_given": true | false,
-  "meeting_agreed": true | false,
-
-  "mentioned_price": 10000000 | null,
-
-  "sentiment": "positive" | "neutral" | "negative" | "frustrated",
-
-  "signals": {
-    "friction": 0.3,
-    "call_readiness": 0.5,
-    "engagement": "low" | "medium" | "high",
-    "urgency": "now" | "week" | "month" | "unclear"
-  }
-}
-
-ВЕРНИ ТОЛЬКО JSON, БЕЗ КОММЕНТАРИЕВ И ПОЯСНЕНИЙ.
+ВЕРНИ ТОЛЬКО JSON:
+{"answered_last_bot_question":"...","answer_mode":"...","target_slot":null,"goal":null,"goal_confidence":null,"budget":null,"budget_confidence":null,"payment_type":null,"payment_type_confidence":null,"preferred_corpus":null,"preferred_area":null,"question_type":null,"objection":null,"wants_materials":false,"contact_given":false,"meeting_agreed":false,"mentioned_price":null,"sentiment":"neutral","urgency":"unclear"}
 """
 
 # Дефолтный результат при ошибке
@@ -202,24 +61,13 @@ _EMPTY_EXTRACTION = {
     "meeting_agreed": False,
     "mentioned_price": None,
     "sentiment": "neutral",
-    "signals": {
-        "friction": 0.3,
-        "call_readiness": 0.5,
-        "engagement": "medium",
-        "urgency": "unclear",
-    },
+    "urgency": "unclear",
 }
 
 
 def _normalize_signals(result: dict) -> dict:
-    """Гарантирует наличие signals с дефолтами."""
-    if "signals" not in result or not isinstance(result.get("signals"), dict):
-        result["signals"] = {}
-    s = result["signals"]
-    s.setdefault("friction", 0.3)
-    s.setdefault("call_readiness", 0.5)
-    s.setdefault("engagement", "medium")
-    s.setdefault("urgency", "unclear")
+    """Гарантирует наличие urgency с дефолтом."""
+    result.setdefault("urgency", "unclear")
     return result
 
 
