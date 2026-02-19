@@ -248,6 +248,11 @@ def format_state_summary(state) -> str:
         area_map = {"small": "до 30 м²", "medium": "30-60 м²", "large": "60+ м²"}
         facts.append(f"Площадь: {area_map.get(state.preferred_area, state.preferred_area)}")
 
+    # Сроки (urgency)
+    urgency = getattr(state, "urgency", None) or "unclear"
+    urgency_map = {"now": "сейчас", "week": "в ближайшую неделю", "month": "в ближайшие месяцы", "unclear": "не известны"}
+    facts.append(f"Сроки: {urgency_map.get(urgency, urgency)}")
+
     # Счётчики и статусы
     materials_count = getattr(state, "materials_request_count", 0) or 0
     if materials_count == 1:
